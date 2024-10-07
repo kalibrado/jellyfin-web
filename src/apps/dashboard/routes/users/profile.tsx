@@ -4,12 +4,12 @@ import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import Dashboard from '../../../../utils/dashboard';
-import globalize from '../../../../scripts/globalize';
+import globalize from '../../../../lib/globalize';
 import LibraryMenu from '../../../../scripts/libraryMenu';
 import ButtonElement from '../../../../elements/ButtonElement';
 import CheckBoxElement from '../../../../elements/CheckBoxElement';
 import InputElement from '../../../../elements/InputElement';
-import LinkEditUserPreferences from '../../../../components/dashboard/users/LinkEditUserPreferences';
+import LinkButton from '../../../../elements/emby-button/LinkButton';
 import SectionTitleContainer from '../../../../elements/SectionTitleContainer';
 import SectionTabs from '../../../../components/dashboard/users/SectionTabs';
 import loading from '../../../../components/loading/loading';
@@ -38,7 +38,7 @@ function onSaveComplete() {
 const UserEdit = () => {
     const [ searchParams ] = useSearchParams();
     const userId = searchParams.get('userId');
-    const [ userName, setUserName ] = useState('');
+    const [ userDto, setUserDto ] = useState<UserDto>();
     const [ deleteFoldersAccess, setDeleteFoldersAccess ] = useState<ResetProvider[]>([]);
     const [ authProviders, setAuthProviders ] = useState<NameIdPair[]>([]);
     const [ passwordResetProviders, setPasswordResetProviders ] = useState<NameIdPair[]>([]);
@@ -147,10 +147,8 @@ const UserEdit = () => {
         txtUserName.disabled = false;
         txtUserName.removeAttribute('disabled');
 
-        const lnkEditUserPreferences = page.querySelector('.lnkEditUserPreferences') as HTMLDivElement;
-        lnkEditUserPreferences.setAttribute('href', 'mypreferencesmenu.html?userId=' + user.Id);
         LibraryMenu.setTitle(user.Name);
-        setUserName(user.Name || '');
+        setUserDto(user);
         (page.querySelector('#txtUserName') as HTMLInputElement).value = user.Name || '';
         (page.querySelector('.chkIsAdmin') as HTMLInputElement).checked = !!user.Policy?.IsAdministrator;
         (page.querySelector('.chkDisabled') as HTMLInputElement).checked = !!user.Policy?.IsDisabled;
@@ -170,8 +168,8 @@ const UserEdit = () => {
         (page.querySelector('.chkRemoteAccess') as HTMLInputElement).checked = user.Policy?.EnableRemoteAccess == null || user.Policy?.EnableRemoteAccess;
         (page.querySelector('#txtRemoteClientBitrateLimit') as HTMLInputElement).value = user.Policy?.RemoteClientBitrateLimit && user.Policy?.RemoteClientBitrateLimit > 0 ?
             (user.Policy?.RemoteClientBitrateLimit / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 }) : '';
-        (page.querySelector('#txtLoginAttemptsBeforeLockout') as HTMLInputElement).value = String(user.Policy?.MaxActiveSessions) || '0';
-        (page.querySelector('#txtMaxActiveSessions') as HTMLInputElement).value = String(user.Policy?.SyncPlayAccess) || '0';
+        (page.querySelector('#txtLoginAttemptsBeforeLockout') as HTMLInputElement).value = String(user.Policy?.LoginAttemptsBeforeLockout) || '-1';
+        (page.querySelector('#txtMaxActiveSessions') as HTMLInputElement).value = String(user.Policy?.MaxActiveSessions) || '0';
         if (window.ApiClient.isMinServerVersion('10.6.0')) {
             (page.querySelector('#selectSyncPlayAccess') as HTMLSelectElement).value = String(user.Policy?.SyncPlayAccess);
         }
@@ -292,7 +290,7 @@ const UserEdit = () => {
             <div ref={element} className='content-primary'>
                 <div className='verticalSection'>
                     <SectionTitleContainer
-                        title={userName}
+                        title={userDto?.Name || ''}
                         url='https://jellyfin.org/docs/general/server/users/'
                     />
                 </div>
@@ -302,10 +300,9 @@ const UserEdit = () => {
                     className='lnkEditUserPreferencesContainer'
                     style={{ paddingBottom: '1em' }}
                 >
-                    <LinkEditUserPreferences
-                        className= 'lnkEditUserPreferences button-link'
-                        title= 'ButtonEditOtherUserPreferences'
-                    />
+                    <LinkButton className='lnkEditUserPreferences button-link' href={userDto?.Id ? `mypreferencesmenu.html?userId=${userDto.Id}` : undefined}>
+                        {globalize.translate('ButtonEditOtherUserPreferences')}
+                    </LinkButton>
                 </div>
                 <form className='editUserProfileForm'>
                     <div className='disabledUserBanner hide'>

@@ -10,7 +10,7 @@ import itemHelper from '../../../components/itemHelper';
 import mediaInfo from '../../../components/mediainfo/mediainfo';
 import focusManager from '../../../components/focusManager';
 import Events from '../../../utils/events.ts';
-import globalize from '../../../scripts/globalize';
+import globalize from '../../../lib/globalize';
 import { appHost } from '../../../components/apphost';
 import layoutManager from '../../../components/layoutManager';
 import * as userSettings from '../../../scripts/settings/userSettings';
@@ -260,7 +260,9 @@ export default function (view) {
 
         // Display the item with its premiere date if it has one
         let title = itemName;
-        if (item.PremiereDate) {
+        if (item.Type == 'Movie' && item.ProductionYear) {
+            title += ` (${datetime.toLocaleString(item.ProductionYear, { useGrouping: false })})`;
+        } else if (item.PremiereDate) {
             try {
                 const year = datetime.toLocaleString(datetime.parseISO8601Date(item.PremiereDate).getFullYear(), { useGrouping: false });
                 title += ` (${year})`;
@@ -870,10 +872,10 @@ export default function (view) {
         buttonMuteIcon.classList.remove('volume_off', 'volume_up');
 
         if (isMuted) {
-            buttonMute.setAttribute('title', globalize.translate('Unmute') + ' (m)');
+            buttonMute.setAttribute('title', globalize.translate('Unmute') + ' (M)');
             buttonMuteIcon.classList.add('volume_off');
         } else {
-            buttonMute.setAttribute('title', globalize.translate('Mute') + ' (m)');
+            buttonMute.setAttribute('title', globalize.translate('Mute') + ' (M)');
             buttonMuteIcon.classList.add('volume_up');
         }
 
@@ -1193,8 +1195,12 @@ export default function (view) {
     function onKeyDown(e) {
         clickedElement = e.target;
 
-        const key = keyboardnavigation.getKeyName(e);
         const isKeyModified = e.ctrlKey || e.altKey || e.metaKey;
+
+        // Skip modified keys
+        if (isKeyModified) return;
+
+        const key = keyboardnavigation.getKeyName(e);
 
         const btnPlayPause = osdBottomElement.querySelector('.btnPause');
 
@@ -1217,8 +1223,10 @@ export default function (view) {
             switch (key) {
                 case 'ArrowLeft':
                 case 'ArrowRight':
-                    showOsd(nowPlayingPositionSlider);
-                    nowPlayingPositionSlider.dispatchEvent(new KeyboardEvent(e.type, e));
+                    if (!e.shiftKey) {
+                        showOsd(nowPlayingPositionSlider);
+                        nowPlayingPositionSlider.dispatchEvent(new KeyboardEvent(e.type, e));
+                    }
                     return;
                 case 'Enter':
                     playbackManager.playPause(currentPlayer);
@@ -1228,7 +1236,7 @@ export default function (view) {
         }
 
         if (layoutManager.tv && keyboardnavigation.isNavigationKey(key)) {
-            showOsd();
+            if (!e.shiftKey) showOsd();
             return;
         }
 
@@ -1246,50 +1254,71 @@ export default function (view) {
                 break;
             case 'k':
             case 'K':
-                playbackManager.playPause(currentPlayer);
-                showOsd(btnPlayPause);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.playPause(currentPlayer);
+                    showOsd(btnPlayPause);
+                }
                 break;
             case 'ArrowUp':
             case 'Up':
-                playbackManager.volumeUp(currentPlayer);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.volumeUp(currentPlayer);
+                }
                 break;
             case 'ArrowDown':
             case 'Down':
-                playbackManager.volumeDown(currentPlayer);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.volumeDown(currentPlayer);
+                }
                 break;
             case 'l':
             case 'L':
             case 'ArrowRight':
             case 'Right':
-                playbackManager.fastForward(currentPlayer);
-                showOsd(btnFastForward);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.fastForward(currentPlayer);
+                    showOsd(btnFastForward);
+                }
                 break;
             case 'j':
             case 'J':
             case 'ArrowLeft':
             case 'Left':
-                playbackManager.rewind(currentPlayer);
-                showOsd(btnRewind);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.rewind(currentPlayer);
+                    showOsd(btnRewind);
+                }
                 break;
             case 'f':
             case 'F':
-                if (!e.ctrlKey && !e.metaKey) {
+                if (!e.shiftKey) {
+                    e.preventDefault();
                     playbackManager.toggleFullscreen(currentPlayer);
                 }
                 break;
             case 'm':
             case 'M':
-                playbackManager.toggleMute(currentPlayer);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.toggleMute(currentPlayer);
+                }
                 break;
             case 'p':
             case 'P':
                 if (e.shiftKey) {
+                    e.preventDefault();
                     playbackManager.previousTrack(currentPlayer);
                 }
                 break;
             case 'n':
             case 'N':
                 if (e.shiftKey) {
+                    e.preventDefault();
                     playbackManager.nextTrack(currentPlayer);
                 }
                 break;
@@ -1312,10 +1341,16 @@ export default function (view) {
                 }
                 break;
             case 'Home':
-                playbackManager.seekPercent(0, currentPlayer);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.seekPercent(0, currentPlayer);
+                }
                 break;
             case 'End':
-                playbackManager.seekPercent(100, currentPlayer);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.seekPercent(100, currentPlayer);
+                }
                 break;
             case '0':
             case '1':
@@ -1326,24 +1361,45 @@ export default function (view) {
             case '6':
             case '7':
             case '8':
-            case '9': {
-                if (!isKeyModified) {
-                    const percent = parseInt(key, 10) * 10;
-                    playbackManager.seekPercent(percent, currentPlayer);
-                }
+            case '9': { // no Shift
+                e.preventDefault();
+                const percent = parseInt(key, 10) * 10;
+                playbackManager.seekPercent(percent, currentPlayer);
                 break;
             }
-            case '>':
+            case '>': // Shift+.
+                e.preventDefault();
                 playbackManager.increasePlaybackRate(currentPlayer);
                 break;
-            case '<':
+            case '<': // Shift+,
+                e.preventDefault();
                 playbackManager.decreasePlaybackRate(currentPlayer);
                 break;
             case 'PageUp':
-                playbackManager.nextChapter(currentPlayer);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.nextChapter(currentPlayer);
+                }
                 break;
             case 'PageDown':
-                playbackManager.previousChapter(currentPlayer);
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    playbackManager.previousChapter(currentPlayer);
+                }
+                break;
+            case 'g':
+            case 'G':
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    subtitleSyncOverlay?.decrementOffset();
+                }
+                break;
+            case 'h':
+            case 'H':
+                if (!e.shiftKey) {
+                    e.preventDefault();
+                    subtitleSyncOverlay?.incrementOffset();
+                }
                 break;
         }
     }
@@ -1384,11 +1440,13 @@ export default function (view) {
         let chapterThumbContainer = bubble.querySelector('.chapterThumbContainer');
         let chapterThumb;
         let chapterThumbText;
+        let chapterThumbName;
 
         // Create bubble elements if they don't already exist
         if (chapterThumbContainer) {
             chapterThumb = chapterThumbContainer.querySelector('.chapterThumbWrapper');
-            chapterThumbText = chapterThumbContainer.querySelector('.chapterThumbText');
+            chapterThumbText = chapterThumbContainer.querySelector('h2.chapterThumbText');
+            chapterThumbName = chapterThumbContainer.querySelector('div.chapterThumbText');
         } else {
             doFullUpdate = true;
 
@@ -1407,9 +1465,22 @@ export default function (view) {
             chapterThumbTextContainer.classList.add('chapterThumbTextContainer');
             chapterThumbContainer.appendChild(chapterThumbTextContainer);
 
+            chapterThumbName = document.createElement('div');
+            chapterThumbName.classList.add('chapterThumbText', 'chapterThumbText-dim');
+            chapterThumbTextContainer.appendChild(chapterThumbName);
+
             chapterThumbText = document.createElement('h2');
             chapterThumbText.classList.add('chapterThumbText');
             chapterThumbTextContainer.appendChild(chapterThumbText);
+        }
+
+        let chapter;
+        for (const currentChapter of item.Chapters || []) {
+            if (positionTicks < currentChapter.StartPositionTicks) {
+                break;
+            }
+
+            chapter = currentChapter;
         }
 
         // Update trickplay values
@@ -1435,6 +1506,7 @@ export default function (view) {
         chapterThumb.style.backgroundPositionY = offsetY + 'px';
 
         chapterThumbText.textContent = datetime.getDisplayRunningTime(positionTicks);
+        chapterThumbName.textContent = chapter?.Name || '';
 
         // Set bubble innerHTML if container isn't part of DOM
         if (doFullUpdate) {

@@ -12,7 +12,7 @@ import {
     destroyFlvPlayer,
     destroyCastPlayer,
     getCrossOriginValue,
-    enableHlsJsPlayer,
+    enableHlsJsPlayerForCodecs,
     applySrc,
     resetSrc,
     playWithPromise,
@@ -27,7 +27,7 @@ import {
 } from '../../components/htmlMediaHelper';
 import itemHelper from '../../components/itemHelper';
 import Screenfull from 'screenfull';
-import globalize from '../../scripts/globalize';
+import globalize from '../../lib/globalize';
 import ServerConnections from '../../components/ServerConnections';
 import profileBuilder, { canPlaySecondaryAudio } from '../../scripts/browserDeviceProfile';
 import { getIncludeCorsCredentials } from '../../scripts/settings/webSettings';
@@ -100,7 +100,7 @@ function enableNativeTrackSupport(mediaSource, track) {
 
     if (track) {
         const format = (track.Codec || '').toLowerCase();
-        if (format === 'ssa' || format === 'ass') {
+        if (format === 'ssa' || format === 'ass' || format === 'pgssub') {
             return false;
         }
     }
@@ -213,6 +213,10 @@ export class HtmlVideoPlayer {
      * @type {any | null | undefined}
      */
     #currentAssRenderer;
+    /**
+     * @type {any | null | undefined}
+     */
+    #currentPgsRenderer;
     /**
      * @type {number | undefined}
      */
@@ -515,7 +519,7 @@ export class HtmlVideoPlayer {
             elem.crossOrigin = crossOrigin;
         }
 
-        if (enableHlsJsPlayer(options.mediaSource.RunTimeTicks, 'Video') && isHls(options.mediaSource)) {
+        if (enableHlsJsPlayerForCodecs(options.mediaSource, 'Video') && isHls(options.mediaSource)) {
             return this.setSrcWithHlsJs(elem, options, val);
         } else if (options.playMethod !== 'Transcode' && options.mediaSource.Container?.toUpperCase() === 'FLV') {
             return this.setSrcWithFlvJs(elem, options, val);
@@ -590,6 +594,9 @@ export class HtmlVideoPlayer {
         if (this.#currentAssRenderer) {
             this.updateCurrentTrackOffset(offsetValue);
             this.#currentAssRenderer.timeOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000 + offsetValue;
+        } else if (this.#currentPgsRenderer) {
+            this.updateCurrentTrackOffset(offsetValue);
+            this.#currentPgsRenderer.timeOffset = (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000 + offsetValue;
         } else {
             const trackElements = this.getTextTracks();
             // if .vtt currently rendering
@@ -1172,6 +1179,12 @@ export class HtmlVideoPlayer {
             octopus.dispose();
         }
         this.#currentAssRenderer = null;
+
+        const pgsRenderer = this.#currentPgsRenderer;
+        if (pgsRenderer) {
+            pgsRenderer.dispose();
+        }
+        this.#currentPgsRenderer = null;
     }
 
     /**
@@ -1317,6 +1330,21 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * @private
+     */
+    renderPgs(videoElement, track, item) {
+        import('libpgs').then((libpgs) => {
+            const options = {
+                video: videoElement,
+                subUrl: getTextTrackUrl(track, item),
+                workerUrl: `${appRouter.baseUrl()}/libraries/libpgs.worker.js`,
+                timeOffset: (this._currentPlayOptions.transcodingOffsetTicks || 0) / 10000000
+            };
+            this.#currentPgsRenderer = new libpgs.PgsRenderer(options);
+        });
+    }
+
+    /**
          * @private
          */
     requiresCustomSubtitlesElement() {
@@ -1432,6 +1460,10 @@ export class HtmlVideoPlayer {
             const format = (track.Codec || '').toLowerCase();
             if (format === 'ssa' || format === 'ass') {
                 this.renderSsaAss(videoElement, track, item);
+                return;
+            }
+            if (format === 'pgssub') {
+                this.renderPgs(videoElement, track, item);
                 return;
             }
 
